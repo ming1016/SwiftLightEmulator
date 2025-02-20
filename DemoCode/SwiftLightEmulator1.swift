@@ -1,3 +1,24 @@
+/*
+ 功能：
+
+ 1. 新增指令支持：
+    - MOV (移动立即数到寄存器)
+    - SUB (减法)
+    - MUL (乘法)
+    - AND (按位与)
+
+ 2. 改进的示例程序，展示了：
+    - 基本算术运算
+    - 逻辑运算
+    - 立即数加载
+
+ 3. 更好的指令解码结构：
+    - 使用 switch 语句进行指令分类
+    - 更详细的操作码解析
+    - 支持立即数操作
+ */
+
+
 import SwiftUI
 import Foundation
 #if os(iOS)
@@ -14,21 +35,34 @@ struct ContentView: View {
                 do {
                     let emulator = LightEmulator()
 
-                    // 修改后的示例程序：计算 5 + 3
+                    // 示例程序：演示多个指令操作
                     let program: [UInt32] = [
-                        0x91000420,  // ADD X0, X1, X2
-                        0xD503201F   // NOP (用作程序结束标记)
+                        0xD2800140,  // MOV X0, #10     ; X0 = 10
+                        0xD2800061,  // MOV X1, #3      ; X1 = 3
+                        0x8B010000,  // ADD X0, X0, X1  ; X0 = X0 + X1
+                        0xCB010000,  // SUB X0, X0, X1  ; X0 = X0 - X1
+                        0x9B017C00,  // MUL X0, X0, X1  ; X0 = X0 * X1
+                        0xD503201F   // NOP (程序结束标记)
                     ]
 
                     try emulator.loadProgram(at: 0x1000, code: program)
-
-                    emulator.setRegister(1, value: 5)  // X1 = 5
-                    emulator.setRegister(2, value: 3)  // X2 = 3
-
                     try emulator.run()
 
                     // 打印结果
                     print("计算结果: \(emulator.getRegister(0))")
+
+                    // 测试逻辑运算示例
+                    let logicProgram: [UInt32] = [
+                        0xD2800140,  // MOV X0, #10
+                        0xD2800061,  // MOV X1, #3
+                        0x8A010000,  // AND X0, X0, X1
+                        0xD503201F   // NOP
+                    ]
+
+                    try emulator.loadProgram(at: 0x1000, code: logicProgram)
+                    try emulator.run()
+                    print("逻辑运算结果: \(emulator.getRegister(0))")
+
                 } catch {
                     print("模拟器错误: \(error)")
                 }
@@ -131,17 +165,55 @@ class MemoryManager {
 }
 
 extension LightEmulator {
-    // 修改 decode 方法
     func decode(_ instruction: UInt32) throws {
         let op31_24 = (instruction >> 24) & 0xFF
         let op23_16 = (instruction >> 16) & 0xFF
 
-        if op31_24 == 0x91 { // ADD 指令
+        switch op31_24 {
+        case 0x91: // ADD (扩展寄存器)
             let rd = Int(instruction & 0x1F)
             let rn = Int((instruction >> 5) & 0x1F)
             let rm = Int((instruction >> 16) & 0x1F)
             registers[rd] = registers[rn] + registers[rm]
-        } else {
+
+        case 0x8B: // ADD (基本形式)
+            let rd = Int(instruction & 0x1F)
+            let rn = Int((instruction >> 5) & 0x1F)
+            let rm = Int((instruction >> 16) & 0x1F)
+            registers[rd] = registers[rn] + registers[rm]
+
+        case 0xCB: // SUB
+            let rd = Int(instruction & 0x1F)
+            let rn = Int((instruction >> 5) & 0x1F)
+            let rm = Int((instruction >> 16) & 0x1F)
+            registers[rd] = registers[rn] - registers[rm]
+
+        case 0x9B: // MUL
+            if (instruction >> 10 & 0x7FF) == 0x7C {
+                let rd = Int(instruction & 0x1F)
+                let rn = Int((instruction >> 5) & 0x1F)
+                let rm = Int((instruction >> 16) & 0x1F)
+                registers[rd] = registers[rn] * registers[rm]
+            }
+
+        case 0x8A: // AND
+            let rd = Int(instruction & 0x1F)
+            let rn = Int((instruction >> 5) & 0x1F)
+            let rm = Int((instruction >> 16) & 0x1F)
+            registers[rd] = registers[rn] & registers[rm]
+
+        case 0xD2: // MOV (immediate)
+            let rd = Int(instruction & 0x1F)
+            let imm16 = (instruction >> 5) & 0xFFFF
+            registers[rd] = UInt64(imm16)
+
+        case 0xD5: // System instructions (包括 NOP)
+            if instruction == 0xD503201F {
+                // NOP - 无操作
+                return
+            }
+
+        default:
             throw EmulatorError.unsupportedInstruction(UInt8(op31_24))
         }
     }
