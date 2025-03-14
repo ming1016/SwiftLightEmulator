@@ -11,10 +11,13 @@ class InstructionDecoder {
     func decode(_ instruction: UInt32, cpu: ARM64CPU, bus: SystemBus) throws {
         let op31_24 = (instruction >> 24) & 0xFF
 
+        // 判断是否处于调试模式
+        let debugMode = EmulatorDebugTools.shared.isDebugModeEnabled
+
         // 为调试添加指令信息输出
-        #if DEBUG
-        print("解码指令: 0x\(String(format: "%08X", instruction)) 操作码: 0x\(String(format: "%02X", op31_24))")
-        #endif
+        if debugMode {
+            print("解码指令: 0x\(String(format: "%08X", instruction)) 操作码: 0x\(String(format: "%02X", op31_24))")
+        }
 
         switch op31_24 {
         case 0x91: // ADD immediate 指令
@@ -99,22 +102,24 @@ class InstructionDecoder {
         let rd = Int(instruction & 0x1F)
         let rn = Int((instruction >> 5) & 0x1F)
         let imm12 = (instruction >> 10) & 0xFFF
+        let debugMode = EmulatorDebugTools.shared.isDebugModeEnabled
 
-        #if DEBUG
-        print("执行 ADD X\(rd), X\(rn), #\(imm12)")
-        let before = cpu.getRegister(UInt32(rn))
-        #endif
-
-        // 获取源寄存器值
-        let srcValue = cpu.getRegister(UInt32(rn))
-        // 添加立即数（确保是UInt64以避免溢出）
-        let result = srcValue + UInt64(imm12)
-        // 设置目标寄存器
-        cpu.setRegister(UInt32(rd), value: result)
-
-        #if DEBUG
-        print("ADD immediate: X\(rd) = X\(rn)(\(before)) + \(imm12) = \(result)")
-        #endif
+        if debugMode {
+            print("执行 ADD X\(rd), X\(rn), #\(imm12)")
+            let before = cpu.getRegister(UInt32(rn))
+            // 获取源寄存器值
+            let srcValue = cpu.getRegister(UInt32(rn))
+            // 添加立即数（确保是UInt64以避免溢出）
+            let result = srcValue + UInt64(imm12)
+            // 设置目标寄存器
+            cpu.setRegister(UInt32(rd), value: result)
+            print("ADD immediate: X\(rd) = X\(rn)(\(before)) + \(imm12) = \(result)")
+        } else {
+            // 非调试模式下的精简版本
+            let srcValue = cpu.getRegister(UInt32(rn))
+            let result = srcValue + UInt64(imm12)
+            cpu.setRegister(UInt32(rd), value: result)
+        }
     }
 
     // 修正现有的ADD寄存器指令执行方法，确保它只处理寄存器格式
@@ -125,20 +130,21 @@ class InstructionDecoder {
 
         let operand1 = cpu.getRegister(UInt32(rn))
         let operand2 = cpu.getRegister(UInt32(rm))
+        let debugMode = EmulatorDebugTools.shared.isDebugModeEnabled
 
-        #if DEBUG
-        print("执行 ADD X\(rd), X\(rn), X\(rm)")
-        print("操作数: X\(rn)=\(operand1), X\(rm)=\(operand2)")
-        #endif
+        if debugMode {
+            print("执行 ADD X\(rd), X\(rn), X\(rm)")
+            print("操作数: X\(rn)=\(operand1), X\(rm)=\(operand2)")
+        }
 
         let result = operand1 + operand2
 
         cpu.setRegister(UInt32(rd), value: result)
         cpu.updateFlags(result: result, operand1: operand1, operand2: operand2, isAddition: true)
 
-        #if DEBUG
-        print("ADD 结果: X\(rd) = \(operand1) + \(operand2) = \(result)")
-        #endif
+        if debugMode {
+            print("ADD 结果: X\(rd) = \(operand1) + \(operand2) = \(result)")
+        }
     }
 
     private func executeSUB(_ instruction: UInt32, cpu: ARM64CPU) {
@@ -158,11 +164,12 @@ class InstructionDecoder {
         let rd = Int(instruction & 0x1F)           // 目标寄存器 [4:0]
         let rn = Int((instruction >> 5) & 0x1F)    // 第一个源寄存器 [9:5]
         let rm = Int((instruction >> 16) & 0x1F)   // 第二个源寄存器 [20:16]
+        let debugMode = EmulatorDebugTools.shared.isDebugModeEnabled
 
-        #if DEBUG
-        print("执行 MUL X\(rd), X\(rn), X\(rm)")
-        print("操作数: X\(rn)=\(cpu.getRegister(UInt32(rn))), X\(rm)=\(cpu.getRegister(UInt32(rm)))")
-        #endif
+        if debugMode {
+            print("执行 MUL X\(rd), X\(rn), X\(rm)")
+            print("操作数: X\(rn)=\(cpu.getRegister(UInt32(rn))), X\(rm)=\(cpu.getRegister(UInt32(rm)))")
+        }
 
         let operand1 = cpu.getRegister(UInt32(rn))
         let operand2 = cpu.getRegister(UInt32(rm))
@@ -170,9 +177,9 @@ class InstructionDecoder {
 
         cpu.setRegister(UInt32(rd), value: result)
 
-        #if DEBUG
-        print("结果: X\(rd)=\(result)")
-        #endif
+        if debugMode {
+            print("结果: X\(rd)=\(result)")
+        }
     }
 
     private func executeAND(_ instruction: UInt32, cpu: ARM64CPU) {
@@ -197,11 +204,12 @@ class InstructionDecoder {
 
         // 从ARM64Assembler获取偏移量，确保正确处理
         let offset = Int32(ARM64Assembler.validateBranchOffset(instruction))
+        let debugMode = EmulatorDebugTools.shared.isDebugModeEnabled
 
-        #if DEBUG
-        // 以十进制和十六进制显示偏移量，便于调试
-        print("条件分支: 条件码=\(condition), 偏移量=\(offset) (0x\(String(format: "%X", offset)))")
-        #endif
+        if debugMode {
+            // 以十进制和十六进制显示偏移量，便于调试
+            print("条件分支: 条件码=\(condition), 偏移量=\(offset) (0x\(String(format: "%X", offset)))")
+        }
 
         // 如果条件满足，则执行分支
         if evaluateCondition(Int(condition), cpu: cpu) {
@@ -211,35 +219,35 @@ class InstructionDecoder {
             // 使用Int64避免溢出
             let targetPC = UInt64(Int64(bitPattern: currentPC) + Int64(offset))
 
-            #if DEBUG
-            print("分支计算详情:")
-            print("  当前PC: 0x\(String(format: "%016X", currentPC))")
-            print("  偏移量: \(offset) (0x\(String(format: "%X", offset)))")
-            print("  目标PC: 0x\(String(format: "%016X", targetPC))")
+            if debugMode {
+                print("分支计算详情:")
+                print("  当前PC: 0x\(String(format: "%016X", currentPC))")
+                print("  偏移量: \(offset) (0x\(String(format: "%X", offset)))")
+                print("  目标PC: 0x\(String(format: "%016X", targetPC))")
 
-            // 验证目标地址的指令指向
-            if targetPC >= 0x1000 && targetPC < 0x2000 {
-                // 假设程序加载在0x1000-0x2000范围内
-                print("  目标指令索引: \((targetPC - 0x1000) / 4)")
+                // 验证目标地址的指令指向
+                if targetPC >= 0x1000 && targetPC < 0x2000 {
+                    // 假设程序加载在0x1000-0x2000范围内
+                    print("  目标指令索引: \((targetPC - 0x1000) / 4)")
+                }
             }
-            #endif
 
             // 安全检查目标地址
             if targetPC < 0x1000 || targetPC % 4 != 0 {
-                #if DEBUG
-                print("警告: 分支目标地址无效 0x\(String(format: "%016X", targetPC))")
-                #endif
+                if debugMode {
+                    print("警告: 分支目标地址无效 0x\(String(format: "%016X", targetPC))")
+                }
             }
 
-            #if DEBUG
-            print("条件成立，从地址 0x\(String(format: "%016X", cpu.pc)) 分支到地址: 0x\(String(format: "%016X", targetPC))")
-            #endif
+            if debugMode {
+                print("条件成立，从地址 0x\(String(format: "%016X", cpu.pc)) 分支到地址: 0x\(String(format: "%016X", targetPC))")
+            }
 
             cpu.pc = targetPC
         } else {
-            #if DEBUG
-            print("条件不成立，继续执行下一条指令")
-            #endif
+            if debugMode {
+                print("条件不成立，继续执行下一条指令")
+            }
         }
     }
 
@@ -258,10 +266,11 @@ class InstructionDecoder {
 
         // 偏移量需要左移2位（字对齐）
         let offset = Int64(Int32(bitPattern: UInt32(imm26 << 2)))
+        let debugMode = EmulatorDebugTools.shared.isDebugModeEnabled
 
-        #if DEBUG
-        print("无条件分支: 类型=\(isLink ? "BL" : "B"), 偏移量=\(offset)")
-        #endif
+        if debugMode {
+            print("无条件分支: 类型=\(isLink ? "BL" : "B"), 偏移量=\(offset)")
+        }
 
         // 如果是带链接的分支，保存返回地址
         if isLink {
@@ -272,9 +281,9 @@ class InstructionDecoder {
         // 计算目标地址，注意PC已经指向当前指令
         let targetPC = UInt64(Int64(cpu.pc) + offset)
 
-        #if DEBUG
-        print("从地址 0x\(String(format: "%016X", cpu.pc)) 分支到地址: 0x\(String(format: "%016X", targetPC))")
-        #endif
+        if debugMode {
+            print("从地址 0x\(String(format: "%016X", cpu.pc)) 分支到地址: 0x\(String(format: "%016X", targetPC))")
+        }
 
         cpu.pc = targetPC
     }
@@ -286,9 +295,11 @@ class InstructionDecoder {
 
         if opc != 0x358 { // 0x358 = 1101011000
             // 不是BR指令
-            #if DEBUG
-            print("不支持的寄存器分支类型: 0x\(String(format: "%X", opc))")
-            #endif
+            let debugMode = EmulatorDebugTools.shared.isDebugModeEnabled
+
+            if debugMode {
+                print("不支持的寄存器分支类型: 0x\(String(format: "%X", opc))")
+            }
             return
         }
 
@@ -297,10 +308,11 @@ class InstructionDecoder {
 
         // 从寄存器获取目标地址
         let targetAddr = cpu.getRegister(UInt32(rn))
+        let debugMode = EmulatorDebugTools.shared.isDebugModeEnabled
 
-        #if DEBUG
-        print("寄存器间接跳转: BR X\(rn), 目标地址=0x\(String(format: "%016X", targetAddr))")
-        #endif
+        if debugMode {
+            print("寄存器间接跳转: BR X\(rn), 目标地址=0x\(String(format: "%016X", targetAddr))")
+        }
 
         // 更新PC
         cpu.pc = targetAddr - 4  // 减4是因为执行完后会自动加4
@@ -308,9 +320,11 @@ class InstructionDecoder {
 
     // 条件评估逻辑
     private func evaluateCondition(_ condition: Int, cpu: ARM64CPU) -> Bool {
-        #if DEBUG
-        print("评估条件码: \(condition), 当前标志位: N=\(cpu.flagN), Z=\(cpu.flagZ), C=\(cpu.flagC), V=\(cpu.flagV)")
-        #endif
+        let debugMode = EmulatorDebugTools.shared.isDebugModeEnabled
+
+        if debugMode {
+            print("评估条件码: \(condition), 当前标志位: N=\(cpu.flagN), Z=\(cpu.flagZ), C=\(cpu.flagC), V=\(cpu.flagV)")
+        }
 
         var result: Bool
 
@@ -343,24 +357,24 @@ class InstructionDecoder {
             result = !cpu.flagZ && (cpu.flagN == cpu.flagV)
         case 13: // LE (Less than or Equal): Z=1 OR N!=V
             result = cpu.flagZ || (cpu.flagN != cpu.flagV)
-            #if DEBUG
-            let detailedResult = "LE条件: Z=\(cpu.flagZ) OR (N!=V) = (N=\(cpu.flagN) != V=\(cpu.flagV)) = \(cpu.flagN != cpu.flagV) => \(result)"
-            print(detailedResult)
-            #endif
+            if debugMode {
+                let detailedResult = "LE条件: Z=\(cpu.flagZ) OR (N!=V) = (N=\(cpu.flagN) != V=\(cpu.flagV)) = \(cpu.flagN != cpu.flagV) => \(result)"
+                print(detailedResult)
+            }
         case 14: // AL (Always): 总是成立
             result = true
         case 15: // NV (Never): 从不成立
             result = false
         default:
-            #if DEBUG
-            print("不支持的条件码: \(condition)")
-            #endif
+            if debugMode {
+                print("不支持的条件码: \(condition)")
+            }
             result = false
         }
 
-        #if DEBUG
-        print("条件 \(condition) 评估结果: \(result ? "成立" : "不成立")")
-        #endif
+        if debugMode {
+            print("条件 \(condition) 评估结果: \(result ? "成立" : "不成立")")
+        }
 
         return result
     }
@@ -369,11 +383,12 @@ class InstructionDecoder {
         let rd = Int(instruction & 0x1F)
         let rn = Int((instruction >> 5) & 0x1F)
         let rm = Int((instruction >> 16) & 0x1F)
+        let debugMode = EmulatorDebugTools.shared.isDebugModeEnabled
 
-        #if DEBUG
-        print("执行 SUBS X\(rd), X\(rn), X\(rm)")
-        print("操作数: X\(rn)=\(cpu.getRegister(UInt32(rn))), X\(rm)=\(cpu.getRegister(UInt32(rm)))")
-        #endif
+        if debugMode {
+            print("执行 SUBS X\(rd), X\(rn), X\(rm)")
+            print("操作数: X\(rn)=\(cpu.getRegister(UInt32(rn))), X\(rm)=\(cpu.getRegister(UInt32(rm)))")
+        }
 
         let operand1 = cpu.getRegister(UInt32(rn))
         let operand2 = cpu.getRegister(UInt32(rm))
@@ -389,8 +404,8 @@ class InstructionDecoder {
         // 更新标志位 - SUBS 总是更新标志位
         cpu.updateFlags(result: result, operand1: operand1, operand2: operand2, isAddition: false)
 
-        #if DEBUG
-        print("SUBS 结果: \(result), 标志位: N=\(cpu.flagN), Z=\(cpu.flagZ), C=\(cpu.flagC), V=\(cpu.flagV)")
-        #endif
+        if debugMode {
+            print("SUBS 结果: \(result), 标志位: N=\(cpu.flagN), Z=\(cpu.flagZ), C=\(cpu.flagC), V=\(cpu.flagV)")
+        }
     }
 }
